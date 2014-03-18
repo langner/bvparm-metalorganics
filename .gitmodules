@@ -1,0 +1,3 @@
+[submodule "bvparm"]
+	path = bvparm
+	url = https://github.com/langner/bvparm.git
