@@ -7,11 +7,13 @@ import sys
 sys.path.append('bvparm')
 from bvparm import BondValenceParameters
 bvparms = BondValenceParameters()
+refs_to_consider = ('a', 'b', 'j')
 
 anion_selection = ['N', "O", 'F', 'P', 'S', 'Cl', 'Se', 'Br', 'I']
 anion_valences = { 'N' : -3, 'O' : -2, 'F' : -1, 'P' : -3, 'S' : -2, 'Cl' : -1, 'Se' : -2, 'Br' : -1, 'I' : -1 }
 
 label2element = lambda lbl: "".join(itertools.takewhile(str.isalpha, lbl))
+
 
 def csv2distances(fname):
 
@@ -50,6 +52,8 @@ def csv2distances(fname):
 def filter_sites(sites, cation_valence, bvparms=bvparms, anion_selection=anion_selection, valence_cutoff = 0.05):
 
     filtered = {}
+    nsingle = 0
+    nmissing = 0
     for site_lbl, site in sites.items():
 
         filtered[site_lbl] = {}
@@ -60,34 +64,42 @@ def filter_sites(sites, cation_valence, bvparms=bvparms, anion_selection=anion_s
 
         for anion_lbl, anion_dist in site.items():
 
+            if throw_away:
+                continue
+
             cation_element = label2element(cation_lbl)
             anion_element = label2element(anion_lbl)
 
-            if anion_element not in anion_selection:
-                print "WARNING: in %s, element %s found, throwing site away..." % (site_lbl, anion_element)
+            try:
+                choices = bvparms[cation_element][cation_valence][anion_element][anion_valences[anion_element]]
+                choose = [st for st in choices if st['ref'] in refs_to_consider]
+            except KeyError:
+                print "WARNING: in %s no appropriate BV parameters for %s-%s, skipping site..." % (site_lbl, cation_element, anion_element)
                 throw_away = True
-                break
+                continue
 
-            choices = bvparms[cation_element][cation_valence][anion_element][anion_valences[anion_element]]
-            choose = [st for st in choices if st['ref'] in ('a', 'b', 'j')]
-            if not choose:
-                print "WARNING: no appropriate BV parameters for %s-%s..." % (cation_element, anion_element)
-                sys.exit(1)
             r0 = choose[-1]['r0']
             b = 0.37
             d_cutoff = r0 - b*numpy.log(valence_cutoff*cation_valence)
             if anion_dist > d_cutoff:
                 continue
 
+            if anion_element not in anion_selection:
+                print "WARNING: in %s, element %s found, throwing away..." % (site_lbl, anion_element)
+                throw_away = True
+                break
+
             filtered[site_lbl][anion_lbl] = anion_dist
 
         if len(filtered[site_lbl]) < 2:
             print "WARNING: only one anion for %s, throwing away..." % (site_lbl)
+            nsingle += 1
             throw_away = True
 
         if throw_away:
             filtered.pop(site_lbl)
 
+    print "Removed %i sites with only one anion" % nsingle
     return filtered
 
 
@@ -111,7 +123,7 @@ if __name__ == "__main__":
 
     cation_element = label2element(dists.keys()[0].split("_")[1])
     start = [bvparms[cation_element][cation_valence][a][anion_valences[a]] for a in anion_selection]
-    start = [[s for s in st if s['ref'] in ('a', 'b', 'j')] for st in start]
+    start = [[s for s in st if s['ref'] in refs_to_consider] for st in start]
     start = [st[-1]['r0'] for st in start]
     print start
     #sys.exit(1)
@@ -120,12 +132,15 @@ if __name__ == "__main__":
     element_counts = [sum([an in s for s in el_in_site]) for an in anion_selection]
     dist = dists
 
+    anion_elements = anion_selection
+
     labels = [lbl for lbl in dists.keys()]
-    def valences(params, cation_valence=1.0*cation_valence):
+    def valences(params):
         v = []
         r = []
         grad = [0.0]*len(params)
         bounds = [0.0]*len(params)
+
         for lbl in labels:
             cation = dists[lbl]
             elements = ["".join(itertools.takewhile(str.isalpha, anion_lbl)) for anion_lbl in cation.keys()]
@@ -140,6 +155,7 @@ if __name__ == "__main__":
                 bounds[iparams[i]] += (b*numpy.log(cation_valence/av))**2
             v.append(av)
             r.append((av - 1.0*cation_valence)**2)
+
         b = 0.37
         grad = (2.0 / b) * numpy.array(grad)
         return numpy.array(v), numpy.array(r), grad, numpy.array(bounds)
@@ -151,20 +167,43 @@ if __name__ == "__main__":
         v, r, g, bounds = valences(params)
         return sum(r)
 
-    to_plot = [[s] for s in start]
-    fg1 = pylab.figure(figsize=(16,8))
-    ax1 = fg1.add_subplot(121)
-    ax2 = fg1.add_subplot(122)
-    for i in range(len(to_plot)):
-        ax1.plot(range(len(to_plot[i])), to_plot[i])
-    v, r, g, bounds = valences(start)
-    h,b = numpy.histogram(v, bins=100, range=[0.0, 2*cation_valence])
-    width = 0.8 * (b[1] - b[0])
-    ax2.set_xlim([0.0, 2*cation_valence])
-    ax2.set_xlabel("bond valence sum $V_i$")
-    ax2.set_ylabel("count")
-    ax2.bar(b[1:] + width/2.0, h, width=width)
+    def make_initial_plot(fig, valences):
+        fig.clf()
+        ax = fig.add_subplot(111)
+        h, b = numpy.histogram(valences, bins=100, range=[0.0, 2*cation_valence])
+        width = b[1] - b[0]
+        x = b[1:] - width/2.0
+        ax.bar(x, h, width=width)
+        ax.set_xlim([0.0, 2*cation_valence])
+        ax.set_xlabel("bond valence sum $V_i$", fontsize=plot_labelsize)
+        ax.set_ylabel("number of binding sites", fontsize=plot_labelsize)
+        return x, h
+
+    def make_optimization_plot(fig, trends, valences):
+        fig.clf()
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
+        for i in range(len(trends)):
+            lbl = "%s-%s" % (cation_element, anion_selection[i])
+            ax1.plot(range(len(trends[i])), trends[i], label=lbl)
+        ax1.set_xlabel("optimization step", fontsize=plot_labelsize)
+        ax1.set_ylabel("$R_0$ parameters", fontsize=plot_labelsize)
+        ax1.legend(loc=6)
+        h,b = numpy.histogram(valences, bins=100, range=[0.0, 2*cation_valence])
+        width = b[1] - b[0]
+        ax2.set_xlim([0.0, 2*cation_valence])
+        ax2.set_xlabel("bond valence sum $V_i$", fontsize=plot_labelsize)
+        ax2.set_ylabel("number of binding sites", fontsize=plot_labelsize)
+        ax2.bar(b[1:] - width/2.0, h, width=width)
+        return h,b
+
+    plot_labelsize = 18
     if plotting:
+        v, r, g, bounds = valences(start)
+        fg1 = pylab.figure()
+        x, h = make_initial_plot(fg1, v)
+        numpy.savetxt("plot_initial_%s.csv" % cation_lbl, zip(x, h), delimiter=',')
+        fg1.savefig("plot_initial_%s.png" % cation_lbl)
         pylab.ion()
         pylab.show()
 
@@ -181,27 +220,26 @@ if __name__ == "__main__":
                 labels.pop(labels.index(lbl))
                 pass
 
+    if plotting:
+        to_plot = [[s] for s in start]
+        fg2 = pylab.figure(figsize=(16,8))
+        v, r, g, bounds = valences(start)
+        x, h = make_optimization_plot(fg2, to_plot, v)
+        pylab.draw()
+
     def callback(xk):
         v, r, g, bounds = valences(xk)
         ravg = sum(r)/len(r)
         rargmax = r.argmax()
         rmax =  r[rargmax]
+        el_in_site = [[label2element(a) for a in c.keys()] for c in dists.values()]
+        element_counts = numpy.array([sum([an in s for s in el_in_site]) for an in anion_selection])
         print "%-7.5f "*len(start) % tuple(xk), "%.4f" % ravg, "%.2f (%s)" % (rmax, labels[r.argmax()]), numpy.linalg.norm(g)
         print "%-7.5f "*len(start) % tuple(numpy.sqrt(bounds / element_counts))
-        for i in range(len(to_plot)):
-            to_plot[i].append(xk[i])
-        fg1.clf()
-        ax1 = fg1.add_subplot(121)
-        ax2 = fg1.add_subplot(122)
-        for i in range(len(to_plot)):
-            ax1.plot(range(len(to_plot[i])), to_plot[i])
-        h,b = numpy.histogram(v, bins=100, range=[0.0, 2*cation_valence])
-        width = 0.8 * (b[1] - b[0])
-        ax2.set_xlim([0.0, 2*cation_valence])
-        ax2.set_xlabel("bond valence sum $V_i$")
-        ax2.set_ylabel("count")
-        ax2.bar(b[1:] + width/2.0, h, width=width)
         if plotting:
+            for i in range(len(to_plot)):
+                to_plot[i].append(xk[i])
+            x, h = make_optimization_plot(fg2, to_plot, v)
             pylab.draw()
         cutoff = cation_valence
         while rmax > cutoff**2:
@@ -223,7 +261,7 @@ if __name__ == "__main__":
                 homoleptic[el] = []
             d = numpy.array(dists[lbl].values())
             b = 0.37
-            homoleptic[el].append(b*numpy.log(cation_valence / sum(numpy.exp(-d/b))))
+            homoleptic[el].append(b*numpy.log(1.0*cation_valence / sum(numpy.exp(-d/b))))
     for el,r in homoleptic.items():
         print el, len(r), numpy.average(r), numpy.std(r)
 
@@ -235,13 +273,13 @@ if __name__ == "__main__":
     print "***Intial callback***"
     opt = optimize.fmin_cg(to_minimize, start, fprime=grad, callback=callback, gtol=1e-03)
 
-pylab.savefig("%s.optimized.png" % cation_name)
+    numpy.savetxt("plot_optimized_%s.csv" % cation_lbl, zip(x, h), delimiter=',')
+    fg2.savefig("plot_optimized_%s.png" % cation_lbl)
 
-el_in_site = [["".join(itertools.takewhile(str.isalpha, a)) for a in c.keys()] for c in dists.values()]
-element_counts = [sum([an in s for s in el_in_site]) for an in anion_elements]
-print "Final element counts:", zip(anion_elements, element_counts)
+    el_in_site = [["".join(itertools.takewhile(str.isalpha, a)) for a in c.keys()] for c in dists.values()]
+    element_counts = [sum([an in s for s in el_in_site]) for an in anion_selection]
+    print "Final element counts:", zip(anion_selection, element_counts)
 
-"""
 homodists = {}
 
 print "Homoleptic statistics"
@@ -259,9 +297,10 @@ for lbl in dists:
 for el,r in homoleptic.items():
     print el, len(r), numpy.average(r), numpy.std(r)
 
+print "********* HOMOLEPTIC OPTIMIZATION *********"
+
 for lbl in dists.keys():
     if lbl not in homodists:
         dists.pop(lbl)
         labels.pop(labels.index(lbl))
 opt = optimize.fmin_cg(to_minimize, start, fprime=grad, callback=callback, gtol=1e-03)
-"""
