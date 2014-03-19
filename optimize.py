@@ -49,6 +49,20 @@ def csv2distances(fname):
 
     return distances
 
+def distances2csv(dists, params, fname):
+
+    with open(fname, "w") as csvfile:
+
+        csvwriter = csv.writer(csvfile)
+        for site_lbl, cation in dists.items():
+            refcode, cation_lbl = site_lbl.split("_")
+            for anion_lbl, d in cation.items():
+                cation_element = label2element(cation_lbl)
+                anion_element = label2element(anion_lbl)
+                r0 = params[anion_selection.index(anion_element)]
+                bv = numpy.exp((r0-d)/0.37)
+                csvwriter.writerow([refcode.rjust(10), cation_lbl.rjust(10), " %i" % cation_valence, anion_lbl.rjust(10), " %.3f"%d, " %.3f" %bv])
+
 def filter_sites(sites, cation_valence, bvparms=bvparms, anion_selection=anion_selection, valence_cutoff = 0.05):
 
     filtered = {}
@@ -167,6 +181,8 @@ if __name__ == "__main__":
         v, r, g, bounds = valences(params)
         return sum(r)
 
+    import roman
+
     def make_initial_plot(fig, valences):
         fig.clf()
         ax = fig.add_subplot(111)
@@ -271,10 +287,14 @@ if __name__ == "__main__":
     print "***Intial callback***"
     callback(start)
     print "***Intial callback***"
+
     opt = optimize.fmin_cg(to_minimize, start, fprime=grad, callback=callback, gtol=1e-03)
 
-    numpy.savetxt("plot_optimized_%s.csv" % cation_lbl, zip(x, h), delimiter=',')
-    fg2.savefig("plot_optimized_%s.png" % cation_lbl)
+    distances2csv(dists, start, 'valences_%s.csv' % cation_lbl)
+
+    if plotting:
+        numpy.savetxt("plot_optimized_%s.csv" % cation_lbl, zip(x, h), delimiter=',')
+        fg2.savefig("plot_optimized_%s.png" % cation_lbl)
 
     el_in_site = [["".join(itertools.takewhile(str.isalpha, a)) for a in c.keys()] for c in dists.values()]
     element_counts = [sum([an in s for s in el_in_site]) for an in anion_selection]
