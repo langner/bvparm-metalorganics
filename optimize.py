@@ -129,7 +129,7 @@ if __name__ == "__main__":
     cation_valence = int(sys.argv[2])
     cation_lbl = "%s%i" % (cation_name, cation_valence)
 
-    dists_all = csv2distances("distances_%s.csv" % cation_lbl)
+    dists_all = csv2distances("initial_%s.csv" % cation_lbl)
     dists = filter_sites(dists_all, cation_valence)
 
     print "Total number of sites:", len(dists_all)
@@ -291,7 +291,7 @@ if __name__ == "__main__":
 
     opt = optimize.fmin_cg(to_minimize, start, fprime=grad, callback=callback, gtol=1e-03)
 
-    distances2csv(dists, start, 'valences_%s.csv' % cation_lbl)
+    distances2csv(dists, start, 'optimized_%s.csv' % cation_lbl)
 
     if plotting:
         numpy.savetxt("plot_optimized_%s.csv" % cation_lbl, zip(x, h), delimiter=',')
