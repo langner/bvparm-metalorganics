@@ -193,6 +193,7 @@ if __name__ == "__main__":
         ax.set_xlim([0.0, 2*cation_valence])
         ax.set_xlabel("bond valence sum $V_i$", fontsize=plot_labelsize)
         ax.set_ylabel("number of binding sites", fontsize=plot_labelsize)
+        ax.text(1.5*cation_valence, 0.95*max(h), "%s(%s)" % (cation_element,roman.toRoman(cation_valence)), fontsize=32)
         return x, h
 
     def make_optimization_plot(fig, trends, valences):
