@@ -1,0 +1,112 @@
+\documentclass{article}
+
+\oddsidemargin 0.0cm
+\evensidemargin 0.0cm
+\textwidth 16.5cm
+\topmargin -1.5cm
+\textheight 24.0cm
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{times}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\begin{document}
+
+\title{Data and code for the optimization of bond valence parameters\\in metalorganic binding sites}
+\date{}
+\maketitle
+
+This document describes how $R_0$ parameters from the bond valence model were semi-autoomatically derived for metal-organic binding sites from the Cambridge Structural Database (CSD). The data and results described here, as well as the code used can found and reference using the DOI \textbf{10.6084/m9.figshare.964285}, and is also accessible at \texttt{https://github.com/langner/bvparm-metalorganics}.
+
+\section{Description of the data}
+
+There are two CSV files provided, which represent the input and output. The first, \texttt{initial.csv}, lists all the binding sites and distances input into the optimization procedure before filtering, and was extracted from the CSD. Specifically, all ligand atoms of the elements  with R factors below 7.5\%. The second, \texttt{optimized.csv}, lists all the distances and corresponding bond valence contributions after the optimization procedure, for binding sites that passed the validation phase.
+
+\section{Description of the code}
+
+The Python script \texttt{optimize.py} reads in \texttt{initial.csv} and writes \texttt{optimized.csv} after preforming the optimization procedure. The code contains a number of comments that explain the optimization process and technical details related to validation and processing binding sites.
+
+\section{Theoretical background for optimization}
+
+The bond valence sum rule, the central tenet of the model, says that for a cationic atom $i$ of element $\alpha$ the sum of valences of the bonds it participates in should be equal to the oxidation state $S_i$,
+$$ \sum_{j \in i} v_{ij} = S_i,$$
+and the bond valences $v_{ij}$ are proportional to the bond lengths $d_{ij}$, with the most popular fitting function being,
+$$v_{ij} = e^{\frac{R_{0}-d_{ij}}{b}}.$$
+where $R_0=R_{\alpha\beta}$ is the distance for a bond of unit valence between atom types $\alpha$ and $\beta$, and $b$ is typically 0.37 (may also be optimized). Index $j$ enumerates anions in the first coordination sphere of $i$. In practice there is always a deviation, but the calculated bond valence sum (BVS) should within acceptable limits be $V_i \approx S_i$.
+
+For homoleptic sites, the $e^{\frac{R_{0}}{b}}$ factor can be extracted and so there is one unique value of $R_0$ satisfying the sum rule for any particular site,
+$$ R_0 = b \ln \left( \frac{S_i}{\Omega_i} \right),$$
+where
+$$\Omega_i = \sum_{j \in i}e^{-\frac{d_{ij}}{b}},$$
+and a typical approach in the literature has been to calculate such parameters for a number of manually chosen sites and to report the average $\bar{R}_0$ as an accurate value.
+
+For heteroleptic sites, there are multiple $R_0$ parameters for each BVS equation, so no unique values can be found for any one binding site. However, an optimal set of $\lbrace \bar{R}_{\alpha\beta} \rbrace$ for a given cation cation type $\alpha$ can be found by minimizing the summed square deviation from the expected oxidation state for many sites,
+$$\lbrace \bar{R}_{\alpha\beta} \rbrace = \argmin \left( \sigma^2_{\alpha} \right),$$
+$$\sigma^2_{\alpha} = \sum_{i \in \alpha} \left(V_i-S_i\right)^2,$$
+and, in our case, $i$ spans all suitable binding sites with cation $\alpha$ as the central metal from the CSD.
+
+Since $\sigma^2_{\alpha}$ is a function of $\lbrace R_{\alpha\beta} \rbrace$ through exponentials, it is convenient to use the gradient for optimization (I use the nonlinear conjugate gradient method),
+$$\frac{\partial \sigma^2_{\alpha}}{\partial R_{\alpha\beta}} = \sum_{i \in \alpha} \frac{2}{b} e^{\frac{R_{\alpha\beta}}{b}} \Omega_i^\beta \left(V_i-S_i\right),$$
+where $\Omega_i^\beta$ is the $\beta$-selecting version of $\Omega_i$,
+$$\Omega_i^\beta = \sum_{j \in i} \delta\left(j \in \beta\right) e^{-\frac{d_{ij}}{b}}.$$
+
+A disadvantage of seeking to optimize the variance of $V_i$ for a wide range of heteroleptic sites is that there is no clear way to estimate a reliable error implied in any particular $R_{\alpha\beta}$. However an upper bound may be set by assuming that $V_i-S_i$ is caused by the error in just one parameter and calculating the change $\Delta R^i_{\alpha\beta}$ required in order to achieve $V_i=S_i$. There is one unique such value for each binding site,
+$$ \Delta R^i_{\alpha\beta} = b\ln\left( \frac{S_i}{V_i} \right).$$
+This value will be the same for each anion for any particular binding site $i$, but will depend on the distribution of $V_i-S_i$ values for sites that contain anions of type $\beta$. This distribution will confer the quality of the set of binding sites, in terms of the dispersion of calcualted BVS sums. The related variance $\left| \Delta R^2_{\alpha\beta} \right|$ will be an upper bound on the variance of $R_{\alpha\beta}$. This is what was reported as the error in the manuscript.
+
+\section{Listing of initial and optimized bond valence sum distributions}
+
+\begin{figure}[h!]
+\includegraphics[width=0.5\textwidth]{plot_initial_sodium1.png}
+\includegraphics[width=0.5\textwidth]{plot_initial_magnesium2.png}
+\caption{Initial bond valence sum distributions around expected oxidation state for the various central cations studied.}
+\end{figure}
+\setcounter{figure}{0}
+\begin{figure}[h!]
+\includegraphics[width=0.5\textwidth]{plot_initial_potassium1.png}
+\includegraphics[width=0.5\textwidth]{plot_initial_calcium2.png}
+\includegraphics[width=0.5\textwidth]{plot_initial_zinc2.png}
+\includegraphics[width=0.5\textwidth]{plot_initial_iron2.png}
+\includegraphics[width=0.5\textwidth]{plot_initial_iron3.png}
+\caption{(continued) Initial bond valence sum distributions around expected oxidation state for the various central cations studied.}
+\end{figure}
+
+\begin{figure}[h!]
+\includegraphics[width=0.99\textwidth]{plot_optimized_sodium1.png}
+\caption{Optimization history (left) and final distribution of bond valence sums (right) for binding sites with Na as the central cation (expected oxidation state of 1).}
+\end{figure}
+
+\begin{figure}[h!]
+\includegraphics[width=0.99\textwidth]{plot_optimized_magnesium2.png}
+\caption{Optimization history (left) and final distribution of bond valence sums (right) for binding sites with Mg as the central cation (expected oxidation state of 2).}
+\end{figure}
+
+\begin{figure}[h!]
+\includegraphics[width=0.99\textwidth]{plot_optimized_potassium1.png}
+\caption{Optimization history (left) and final distribution of bond valence sums (right) for binding sites with K as the central cation (expected oxidation state of 1).}
+\end{figure}
+
+\begin{figure}[h!]
+\includegraphics[width=0.99\textwidth]{plot_optimized_calcium2.png}
+\caption{Optimization history (left) and final distribution of bond valence sums (right) for binding sites with Ca as the central cation (expected oxidation state of 2).}
+\end{figure}
+
+\begin{figure}[h!]
+\includegraphics[width=0.99\textwidth]{plot_optimized_zinc2.png}
+\caption{Optimization history (left) and final distribution of bond valence sums (right) for binding sites with An as the central cation (expected oxidation state of 2).}
+\end{figure}
+
+\begin{figure}[h!]
+\includegraphics[width=0.99\textwidth]{plot_optimized_iron2.png}
+\caption{Optimization history (left) and final distribution of bond valence sums (right) for binding sites with Fe(II) as the central cation (expected oxidation state of 2).}
+\end{figure}
+
+\begin{figure}[h!]
+\includegraphics[width=0.99\textwidth]{plot_optimized_iron3.png}
+\caption{Optimization history (left) and final distribution of bond valence sums (right) for binding sites with Fe(III) as the central cation (expected oxidation state of 3).}
+\end{figure}
+
+\end{document}
