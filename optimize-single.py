@@ -14,6 +14,8 @@ anion_valences = { 'N' : -3, 'O' : -2, 'F' : -1, 'P' : -3, 'S' : -2, 'Cl' : -1, 
 
 label2element = lambda lbl: "".join(itertools.takewhile(str.isalpha, lbl))
 
+PREFIX = 'data-single'
+
 
 def csv2distances(fname):
 
@@ -129,7 +131,7 @@ if __name__ == "__main__":
     cation_valence = int(sys.argv[2])
     cation_lbl = "%s%i" % (cation_name, cation_valence)
 
-    dists_all = csv2distances("initial_%s.csv" % cation_lbl)
+    dists_all = csv2distances(PREFIX + "/initial_%s.csv" % cation_lbl)
     dists = filter_sites(dists_all, cation_valence)
 
     print "Total number of sites:", len(dists_all)
@@ -291,11 +293,11 @@ if __name__ == "__main__":
 
     opt = optimize.fmin_cg(to_minimize, start, fprime=grad, callback=callback, gtol=1e-03)
 
-    distances2csv(dists, start, 'optimized_%s.csv' % cation_lbl)
+    distances2csv(dists, start, PREFIX + '/optimized_%s.csv' % cation_lbl)
 
     if plotting:
-        numpy.savetxt("plot_optimized_%s.csv" % cation_lbl, zip(x, h), delimiter=',')
-        fg2.savefig("plot_optimized_%s.png" % cation_lbl)
+        numpy.savetxt(PREFIX + "/plot_optimized_%s.csv" % cation_lbl, zip(x, h), delimiter=',')
+        fg2.savefig(PREFIX + "/plot_optimized_%s.png" % cation_lbl)
 
     el_in_site = [["".join(itertools.takewhile(str.isalpha, a)) for a in c.keys()] for c in dists.values()]
     element_counts = [sum([an in s for s in el_in_site]) for an in anion_selection]
