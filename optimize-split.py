@@ -33,6 +33,8 @@ nanions = len(anion_selection)
 # for example it will turn C1 into just C and Cl25 into just Cl.
 label2element = lambda lbl: "".join(itertools.takewhile(str.isalpha, lbl))
 
+PREFIX = "data-split"
+
 
 def get_position_in_list(L, S):
     """Get the index in S of the first element in the intersection of L and S."""
@@ -201,7 +203,7 @@ if __name__ == "__main__":
     # The new files are created by Heping manually and have a slightly
     # different format than before, and contain only the column we need.
     #dists_all = csv2distances("initial_%s.csv" % cation_lbl)
-    dists_all = csv2distances("bvparam2014d_%s.csv" % cation_lbl)
+    dists_all = csv2distances(PREFIX + "/bvparam2014d_%s.csv" % cation_lbl)
     
     dists = filter_sites(dists_all, cation_valence)
     picks = [random.choice(range(degeneracy)) for d in dists]
@@ -433,12 +435,12 @@ if __name__ == "__main__":
     fname = 'optimized_%s_%s' % (cation_lbl, s_anions)
     if degeneracy > 1:
         fname += "_split"
-    distances2csv(dists, opt, fname + ".csv", labels, picks, degeneracy)
+    distances2csv(dists, opt, PREFIX + '/' + fname + ".csv", labels, picks, degeneracy)
 
     if plotting:
         fname = "plot_" + fname
-        numpy.savetxt(fname + ".csv", zip(x, h), delimiter=',')
-        fg2.savefig(fname + ".png")
+        numpy.savetxt(PREFIX + '/' + fname + ".csv", zip(x, h), delimiter=',')
+        fg2.savefig(PREFIX + '/' + fname + ".png")
 
     el_in_site = [["".join(itertools.takewhile(str.isalpha, a)) for a in c.keys()] for c in dists.values()]
     element_counts = []
